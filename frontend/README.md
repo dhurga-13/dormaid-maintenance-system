@@ -26,34 +26,6 @@ A complete full-stack web application for managing maintenance requests in unive
    Frontend: http://localhost:5173
    Backend: http://localhost:5000
 
-## PROJECT STRUCTURE
-dormaid-maintenance-system/
-├── frontend/                 # React application
-│   ├── public/
-│   │   └── index.html
-│   ├── src/
-│   │   ├── components/      # React components
-│   │   │   ├── Profile.js
-│   │   │   └── ...
-│   │   ├── context/         # Context providers
-│   │   │   └── AuthContext.js
-│   │   ├── App.js          # Main App component
-│   │   ├── App.css
-│   │   └── index.js        # Entry point
-│   ├── package.json
-│   └── vite.config.js
-├── backend/                  # Node.js API
-│   ├── routes/              # API routes
-│   │   ├── auth.js
-│   │   └── maintenance.js
-│   ├── middleware/          # Custom middleware
-│   │   └── auth.js
-│   ├── database.js          # Database configuration
-│   ├── server.js           # Server entry point
-│   └── package.json
-├── README.md
-└── .gitignore
-
 ## FEATURES
 
 - Multi-role authentication (Student, Technician, Admin)
