@@ -1,3 +1,4 @@
+// ...existing code...
 const jwt = require('jsonwebtoken');
 
 const JWT_SECRET = 'dormaid_secret_key_2024';
@@ -18,7 +19,9 @@ exports.protect = (req, res, next) => {
 
   try {
     const decoded = jwt.verify(token, JWT_SECRET);
-    req.user = { userId: decoded.userId };
+    const uid = decoded.userId || decoded.id || decoded.sub || decoded.uid;
+    const email = decoded.email || decoded.user_email || null;
+    req.user = { userId: String(uid), email: email || '' };
     next();
   } catch (error) {
     return res.status(401).json({
@@ -27,3 +30,4 @@ exports.protect = (req, res, next) => {
     });
   }
 };
+// ...existing code...

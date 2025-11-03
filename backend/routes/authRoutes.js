@@ -7,7 +7,7 @@ const router = express.Router();
 
 // Updated validation rules - using frontend field names
 const registerValidation = [
-  body('name')  // Changed from 'username' to 'name'
+  body('username')  // Changed from 'username' to 'name'
     .isLength({ min: 3 })
     .withMessage('Full name must be at least 3 characters long'),
   body('email')
