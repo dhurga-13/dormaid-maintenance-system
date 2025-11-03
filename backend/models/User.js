@@ -4,22 +4,22 @@ const bcrypt = require('bcryptjs');
 class User {
   // Create new user
   static create(userData, callback) {
-    const { username, email, password, role = 'student', room_number, phone, work_area } = userData;
+    const { username, email, password, role = 'student', room_number, block_number, phone, work_area, register_number } = userData;
     
     bcrypt.hash(password, 10, (err, hashedPassword) => {
       if (err) return callback(err);
       
       const query = `
-        INSERT INTO users (username, email, password_hash, role, room_number, phone, work_area) 
-        VALUES (?, ?, ?, ?, ?, ?, ?)
+        INSERT INTO users (username, email, password_hash, role, room_number, block_number, phone, work_area, register_number) 
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
       `;
       
-      db.run(query, [username, email, hashedPassword, role, room_number, phone, work_area || null], function(err) {
+      db.run(query, [username, email, hashedPassword, role, room_number, block_number || null, phone, work_area || null, register_number || null], function(err) {
         if (err) return callback(err);
         
         // Get the inserted user
         db.get(
-          'SELECT id, username, email, role, room_number, phone, work_area, created_at FROM users WHERE id = ?',
+          'SELECT id, username, email, role, room_number, block_number, phone, work_area, register_number, created_at FROM users WHERE id = ?',
           [this.lastID],
           (err, row) => {
             callback(err, row);
@@ -37,7 +37,7 @@ class User {
   // Find user by ID
   static findById(id, callback) {
     db.get(
-      'SELECT id, username, email, role, room_number, phone, created_at FROM users WHERE id = ?',
+      'SELECT id, username, email, role, room_number, block_number, phone, work_area, register_number, created_at FROM users WHERE id = ?',
       [id],
       callback
     );

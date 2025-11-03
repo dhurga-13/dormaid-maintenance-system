@@ -34,14 +34,18 @@ exports.register = (req, res) => {
       password, 
       role = 'student', 
       roomNumber,  // Frontend sends 'roomNumber' (maps to room_number)
+      blockNumber, // Frontend sends 'blockNumber' for students
       phone,
-      workArea     // Frontend sends 'workArea' for technicians
+      workArea,     // Frontend sends 'workArea' for technicians
+      registerNumber // Frontend sends 'registerNumber' for students
     } = req.body;
 
     // Map frontend field names to backend expectations
     const username = name; // Map 'name' to 'username'
     const room_number = roomNumber; // Map 'roomNumber' to 'room_number'
     const work_area = role === 'technician' ? workArea || null : null;
+    const register_number = role === 'student' ? (registerNumber || null) : null;
+    const block_number = role === 'student' ? (blockNumber || null) : null;
 
     console.log('📝 Mapped data:', {
       username: username,
@@ -49,8 +53,22 @@ exports.register = (req, res) => {
       passwordLength: password ? password.length : 0,
       role: role,
       room_number: room_number,
-      phone: phone
+      phone: phone,
+      work_area,
+      register_number,
+      block_number
     });
+
+    // Validate register number for students
+    if (role === 'student') {
+      const pattern = /^[0-9]{2}[A-Za-z]{3}[0-9]{4}$/; // e.g., 23MIS0145
+      if (!register_number || !pattern.test(register_number)) {
+        return res.status(400).json({
+          success: false,
+          message: 'Invalid register number format (e.g., 23MIS0145)'
+        });
+      }
+    }
 
     // Check if user already exists
     User.findByEmail(email, (err, existingUser) => {
@@ -79,8 +97,10 @@ exports.register = (req, res) => {
         password: password,
         role: role,
         room_number: room_number,
-      phone: phone,
-      work_area: work_area
+        block_number: block_number,
+        phone: phone,
+        work_area: work_area,
+        register_number: register_number
       };
 
       User.create(userData, (err, user) => {
@@ -119,8 +139,10 @@ exports.register = (req, res) => {
               email: user.email,
               role: user.role,
               room_number: user.room_number,
+              block_number: user.block_number,
               phone: user.phone,
-              work_area: user.work_area || null
+              work_area: user.work_area || null,
+              register_number: user.register_number || null
             },
             token
           }
@@ -218,7 +240,10 @@ exports.login = (req, res) => {
               email: user.email,
               role: user.role,
               room_number: user.room_number,
-              phone: user.phone
+              block_number: user.block_number,
+              phone: user.phone,
+              work_area: user.work_area || null,
+              register_number: user.register_number || null
             },
             token
           }
@@ -276,5 +301,114 @@ exports.getProfile = (req, res) => {
       success: false,
       message: 'Internal server error'
     });
+  }
+};
+
+// Update current user profile
+exports.updateProfile = (req, res) => {
+  try {
+    const userId = req.user.userId;
+    const { name, email, phone, roomNumber, blockNumber, workArea, registerNumber } = req.body;
+
+    // Build dynamic update based on provided fields
+    const fields = [];
+    const params = [];
+
+    if (name !== undefined) { fields.push('username = ?'); params.push(name); }
+    if (email !== undefined) { fields.push('email = ?'); params.push(email); }
+    if (phone !== undefined) { fields.push('phone = ?'); params.push(phone); }
+    if (roomNumber !== undefined) { fields.push('room_number = ?'); params.push(roomNumber); }
+    if (blockNumber !== undefined) { fields.push('block_number = ?'); params.push(blockNumber); }
+    if (workArea !== undefined) { fields.push('work_area = ?'); params.push(workArea); }
+    if (registerNumber !== undefined) { fields.push('register_number = ?'); params.push(registerNumber); }
+
+    if (fields.length === 0) {
+      return res.json({ success: true, message: 'No changes provided', data: { } });
+    }
+
+    const sql = `UPDATE users SET ${fields.join(', ')}, created_at = created_at WHERE id = ?`;
+    params.push(userId);
+
+    const db = require('../database');
+    db.run(sql, params, function(err) {
+      if (err) {
+        console.error('❌ Database error in updateProfile:', err);
+        if (err.message && err.message.includes('UNIQUE constraint failed: users.email')) {
+          return res.status(409).json({ success: false, message: 'Email already in use' });
+        }
+        if (err.message && err.message.includes('UNIQUE constraint failed: users.username')) {
+          return res.status(409).json({ success: false, message: 'Username already in use' });
+        }
+        return res.status(500).json({ success: false, message: 'Internal server error' });
+      }
+
+      // Return updated user
+      User.findById(userId, (findErr, user) => {
+        if (findErr || !user) {
+          return res.status(200).json({ success: true, message: 'Profile updated', data: {} });
+        }
+        return res.json({ success: true, message: 'Profile updated', data: { user } });
+      });
+    });
+  } catch (error) {
+    console.error('💥 Unexpected error in updateProfile:', error);
+    res.status(500).json({ success: false, message: 'Internal server error' });
+  }
+};
+
+// Change password
+exports.changePassword = (req, res) => {
+  try {
+    const userId = req.user.userId;
+    const { currentPassword, newPassword } = req.body;
+
+    if (!currentPassword || !newPassword) {
+      return res.status(400).json({ success: false, message: 'Current and new password are required' });
+    }
+    if (String(newPassword).length < 6) {
+      return res.status(400).json({ success: false, message: 'New password must be at least 6 characters' });
+    }
+
+    // Fetch user with password hash
+    const db = require('../database');
+    db.get('SELECT id, password_hash FROM users WHERE id = ?', [userId], (err, row) => {
+      if (err) {
+        console.error('❌ Database error in changePassword (select):', err);
+        return res.status(500).json({ success: false, message: 'Internal server error' });
+      }
+      if (!row) {
+        return res.status(404).json({ success: false, message: 'User not found' });
+      }
+
+      // Verify current password
+      User.verifyPassword(currentPassword, row.password_hash, (vErr, isMatch) => {
+        if (vErr) {
+          console.error('❌ Password verify error:', vErr);
+          return res.status(500).json({ success: false, message: 'Internal server error' });
+        }
+        if (!isMatch) {
+          return res.status(401).json({ success: false, message: 'Current password is incorrect' });
+        }
+
+        // Hash and update new password
+        const bcrypt = require('bcryptjs');
+        bcrypt.hash(newPassword, 10, (hErr, hashed) => {
+          if (hErr) {
+            console.error('❌ Password hash error:', hErr);
+            return res.status(500).json({ success: false, message: 'Internal server error' });
+          }
+          db.run('UPDATE users SET password_hash = ? WHERE id = ?', [hashed, userId], function(uErr) {
+            if (uErr) {
+              console.error('❌ Database error in changePassword (update):', uErr);
+              return res.status(500).json({ success: false, message: 'Internal server error' });
+            }
+            return res.json({ success: true, message: 'Password updated successfully' });
+          });
+        });
+      });
+    });
+  } catch (error) {
+    console.error('💥 Unexpected error in changePassword:', error);
+    res.status(500).json({ success: false, message: 'Internal server error' });
   }
 };

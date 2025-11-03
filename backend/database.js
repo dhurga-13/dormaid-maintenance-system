@@ -24,8 +24,10 @@ function initializeDatabase() {
       password_hash TEXT NOT NULL,
       role TEXT DEFAULT 'student',
       room_number TEXT,
+      block_number TEXT,
       phone TEXT,
       work_area TEXT,
+      register_number TEXT UNIQUE,
       created_at DATETIME DEFAULT CURRENT_TIMESTAMP
     )
   `, (err) => {
@@ -157,6 +159,8 @@ function addMissingUserColumnsIfNeeded() {
     }
 
     const hasWorkArea = columns.some(col => col.name === 'work_area');
+    const hasRegisterNumber = columns.some(col => col.name === 'register_number');
+    const hasBlockNumber = columns.some(col => col.name === 'block_number');
 
     if (!hasWorkArea) {
       db.run(`
@@ -171,6 +175,38 @@ function addMissingUserColumnsIfNeeded() {
       });
     } else {
       console.log('✅ work_area column already exists');
+    }
+
+    if (!hasRegisterNumber) {
+      db.run(`
+        ALTER TABLE users 
+        ADD COLUMN register_number TEXT
+      `, (alterErr) => {
+        if (alterErr) {
+          console.error('Error adding register_number column:', alterErr);
+        } else {
+          // Add unique index if not exists (SQLite workaround via CREATE UNIQUE INDEX IF NOT EXISTS)
+          db.run(`CREATE UNIQUE INDEX IF NOT EXISTS idx_users_register_number ON users(register_number)`);
+          console.log('✅ Successfully added register_number column to users table');
+        }
+      });
+    } else {
+      console.log('✅ register_number column already exists');
+    }
+
+    if (!hasBlockNumber) {
+      db.run(`
+        ALTER TABLE users 
+        ADD COLUMN block_number TEXT
+      `, (alterErr) => {
+        if (alterErr) {
+          console.error('Error adding block_number column:', alterErr);
+        } else {
+          console.log('✅ Successfully added block_number column to users table');
+        }
+      });
+    } else {
+      console.log('✅ block_number column already exists');
     }
   });
 }

@@ -22,7 +22,9 @@ const Profile = () => {
     username: '',
     email: '',
     phone: '',
-    room_number: ''
+    room_number: '',
+    block_number: '',
+    register_number: ''
   });
 
   // OTP state
@@ -44,7 +46,9 @@ const Profile = () => {
         username: user.username || user.name || '',
         email: user.email || '',
         phone: user.phone || '',
-        room_number: user.room_number || user.roomNumber || ''
+        room_number: user.room_number || user.roomNumber || '',
+        block_number: user.block_number || user.blockNumber || '',
+        register_number: user.register_number || user.registerNumber || ''
       });
     }
   }, [user]);
@@ -65,7 +69,14 @@ const Profile = () => {
     try {
       const requiresVerification = profileData.email !== user.email;
       
-      const result = await updateProfile(profileData, requiresVerification);
+      const result = await updateProfile({
+        name: profileData.username,
+        email: profileData.email,
+        phone: profileData.phone,
+        roomNumber: profileData.room_number,
+        blockNumber: profileData.block_number,
+        registerNumber: profileData.register_number
+      }, requiresVerification);
       
       if (result.requiresVerification) {
         setPendingEmail(profileData.email);
@@ -78,7 +89,9 @@ const Profile = () => {
             username: result.user.username || result.user.name || '',
             email: result.user.email || '',
             phone: result.user.phone || '',
-            room_number: result.user.room_number || result.user.roomNumber || ''
+            room_number: result.user.room_number || result.user.roomNumber || '',
+            block_number: result.user.block_number || result.user.blockNumber || '',
+            register_number: result.user.register_number || result.user.registerNumber || ''
           });
         }
         setMessage({ type: 'success', text: result.message || 'Profile updated successfully!' });
@@ -111,7 +124,9 @@ const Profile = () => {
             username: result.user.username || result.user.name || '',
             email: result.user.email || '',
             phone: result.user.phone || '',
-            room_number: result.user.room_number || result.user.roomNumber || ''
+            room_number: result.user.room_number || result.user.roomNumber || '',
+            block_number: result.user.block_number || result.user.blockNumber || '',
+            register_number: result.user.register_number || result.user.registerNumber || ''
           });
         }
       } else {
@@ -431,6 +446,40 @@ const Profile = () => {
                   </div>
                 </div>
 
+                {/* Register Number - students */}
+                {user.role === 'student' && (
+                  <div>
+                    <label htmlFor="register_number" style={{
+                      display: 'block',
+                      fontSize: '0.875rem',
+                      fontWeight: '500',
+                      color: '#374151',
+                      marginBottom: '0.5rem'
+                    }}>
+                      Register Number
+                    </label>
+                    <input
+                      id="register_number"
+                      type="text"
+                      required
+                      value={profileData.register_number}
+                      onChange={(e) => setProfileData(prev => ({ ...prev, register_number: e.target.value.toUpperCase() }))}
+                      style={{
+                        width: '100%',
+                        padding: '0.75rem',
+                        border: '1px solid #d1d5db',
+                        borderRadius: '0.375rem',
+                        fontSize: '1rem',
+                        transition: 'border-color 0.2s',
+                        outline: 'none'
+                      }}
+                      onFocus={(e) => e.target.style.borderColor = '#3b82f6'}
+                      onBlur={(e) => e.target.style.borderColor = '#d1d5db'}
+                      placeholder="23MIS0145"
+                    />
+                  </div>
+                )}
+
                 {/* Room Number Field - Hidden for technicians */}
                 {user.role !== 'technician' && (
                   <div>
@@ -476,6 +525,39 @@ const Profile = () => {
                         placeholder={user.role === 'admin' ? 'e.g., Block A' : 'e.g., A-101'}
                       />
                     </div>
+                  </div>
+                )}
+
+                {/* Block Number - students */}
+                {user.role === 'student' && (
+                  <div>
+                    <label htmlFor="block_number" style={{
+                      display: 'block',
+                      fontSize: '0.875rem',
+                      fontWeight: '500',
+                      color: '#374151',
+                      marginBottom: '0.5rem'
+                    }}>
+                      Block Number
+                    </label>
+                    <input
+                      id="block_number"
+                      type="text"
+                      value={profileData.block_number}
+                      onChange={(e) => setProfileData(prev => ({ ...prev, block_number: e.target.value }))}
+                      style={{
+                        width: '100%',
+                        padding: '0.75rem',
+                        border: '1px solid #d1d5db',
+                        borderRadius: '0.375rem',
+                        fontSize: '1rem',
+                        transition: 'border-color 0.2s',
+                        outline: 'none'
+                      }}
+                      onFocus={(e) => e.target.style.borderColor = '#3b82f6'}
+                      onBlur={(e) => e.target.style.borderColor = '#d1d5db'}
+                      placeholder="e.g., Block A"
+                    />
                   </div>
                 )}
 

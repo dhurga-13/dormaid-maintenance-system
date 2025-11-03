@@ -12,7 +12,8 @@ const Register = () => {
     phone: '',
     roomNumber: '',
     role: 'student',
-    workArea: 'other'
+    workArea: 'other',
+    registerNumber: ''
   });
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
@@ -44,7 +45,9 @@ const Register = () => {
         phone: formData.phone,
         roomNumber: formData.roomNumber,
         role: formData.role,
-        workArea: formData.role === 'technician' ? formData.workArea : undefined
+        workArea: formData.role === 'technician' ? formData.workArea : undefined,
+        registerNumber: formData.role === 'student' ? formData.registerNumber : undefined,
+        blockNumber: formData.role === 'student' ? (formData.blockNumber || '') : undefined
       });
 
       if (result.success) {
@@ -266,6 +269,44 @@ const Register = () => {
                   <option value="carpenter">Carpenter</option>
                   <option value="other">Other</option>
                 </select>
+              </div>
+            )}
+
+            {formData.role === 'student' && (
+              <div>
+                <label htmlFor="registerNumber" className="form-label">
+                  Register Number (e.g., 23MIS0145) *
+                </label>
+                <input
+                  id="registerNumber"
+                  name="registerNumber"
+                  type="text"
+                  required
+                  value={formData.registerNumber}
+                  onChange={(e) => handleInputChange('registerNumber', e.target.value.toUpperCase())}
+                  className="form-input"
+                  placeholder="23MIS0145"
+                />
+                <p style={{ fontSize: '0.75rem', color: '#6b7280', marginTop: '0.25rem' }}>
+                  Use two digits + three letters + four digits
+                </p>
+              </div>
+            )}
+
+            {formData.role === 'student' && (
+              <div>
+                <label htmlFor="blockNumber" className="form-label">
+                  Block Number
+                </label>
+                <input
+                  id="blockNumber"
+                  name="blockNumber"
+                  type="text"
+                  value={formData.blockNumber || ''}
+                  onChange={(e) => handleInputChange('blockNumber', e.target.value)}
+                  className="form-input"
+                  placeholder="e.g., Block A"
+                />
               </div>
             )}
 
