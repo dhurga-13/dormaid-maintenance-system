@@ -299,6 +299,11 @@ const ComplaintStatus = () => {
                   <p style={{ fontSize: '0.875rem', color: '#6b7280', lineHeight: '1.5', margin: 0 }}>
                     {complaint.description}
                   </p>
+                  {complaint.assigned_by_admin_name && complaint.assigned_at && (
+                    <p style={{ fontSize: '0.75rem', color: '#6b7280', marginTop: '0.5rem' }}>
+                      Assigned by {complaint.assigned_by_admin_name} on {formatDate(complaint.assigned_at)}
+                    </p>
+                  )}
                 </div>
                 <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', flexShrink: 0 }}>
                   {getStatusIcon(complaint.status)}

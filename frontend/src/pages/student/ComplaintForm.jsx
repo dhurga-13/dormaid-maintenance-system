@@ -9,7 +9,8 @@ const ComplaintForm = () => {
   const [formData, setFormData] = useState({
     title: '',
     description: '',
-    priority: 'medium'
+    priority: 'medium',
+    complaint_type: 'other'
   });
   const [loading, setLoading] = useState(false);
   const [message, setMessage] = useState({ type: '', text: '' });
@@ -40,7 +41,7 @@ const ComplaintForm = () => {
           type: 'success',
           text: 'Complaint submitted successfully! You will be redirected to dashboard.'
         });
-        setFormData({ title: '', description: '', priority: 'medium' });
+        setFormData({ title: '', description: '', priority: 'medium', complaint_type: 'other' });
         
         // Redirect to dashboard after 2 seconds
         setTimeout(() => {
@@ -125,6 +126,37 @@ const ComplaintForm = () => {
         border: '1px solid #e5e7eb'
       }}>
         <form onSubmit={handleSubmit}>
+          {/* Type Field */}
+          <div style={{ marginBottom: '1.5rem' }}>
+            <label htmlFor="complaint_type" style={{
+              display: 'block',
+              marginBottom: '0.5rem',
+              fontWeight: '500',
+              color: '#374151',
+              fontSize: '0.875rem'
+            }}>
+              Type of Complaint
+            </label>
+            <select
+              id="complaint_type"
+              value={formData.complaint_type}
+              onChange={(e) => setFormData({ ...formData, complaint_type: e.target.value })}
+              style={{
+                width: '100%',
+                padding: '0.75rem',
+                border: '1px solid #d1d5db',
+                borderRadius: '0.5rem',
+                fontSize: '1rem',
+                boxSizing: 'border-box'
+              }}
+            >
+              <option value="cleaning">Cleaning</option>
+              <option value="plumbing">Plumbing</option>
+              <option value="electrician">Electrician</option>
+              <option value="carpenter">Carpenter</option>
+              <option value="other">Other</option>
+            </select>
+          </div>
           {/* Title Field */}
           <div style={{ marginBottom: '1.5rem' }}>
             <label htmlFor="title" style={{

@@ -9,7 +9,11 @@ router.get('/my-requests', protect, (req, res) => {
   const userId = req.user.userId;
 
   db.all(
-    `SELECT * FROM maintenance_requests WHERE user_id = ? ORDER BY created_at DESC`,
+    `SELECT mr.*, ab.username AS assigned_by_admin_name
+     FROM maintenance_requests mr
+     LEFT JOIN users ab ON mr.assigned_by_admin_id = ab.id
+     WHERE mr.user_id = ?
+     ORDER BY mr.created_at DESC`,
     [userId],
     (err, rows) => {
       if (err) {
@@ -31,7 +35,7 @@ router.get('/my-requests', protect, (req, res) => {
 // Create new maintenance request
 router.post('/create', protect, (req, res) => {
   const userId = req.user.userId;
-  const { title, description, priority = 'medium', room_number } = req.body;
+  const { title, description, priority = 'medium', room_number, complaint_type = 'other' } = req.body;
 
   if (!title || !description) {
     return res.status(400).json({
@@ -41,11 +45,11 @@ router.post('/create', protect, (req, res) => {
   }
 
   const query = `
-    INSERT INTO maintenance_requests (user_id, title, description, priority, room_number, status) 
-    VALUES (?, ?, ?, ?, ?, 'pending')
+    INSERT INTO maintenance_requests (user_id, title, description, priority, room_number, complaint_type, status) 
+    VALUES (?, ?, ?, ?, ?, ?, 'pending')
   `;
 
-  db.run(query, [userId, title, description, priority, room_number], function(err) {
+  db.run(query, [userId, title, description, priority, room_number, complaint_type], function(err) {
     if (err) {
       console.error('Database error:', err);
       return res.status(500).json({
@@ -62,6 +66,7 @@ router.post('/create', protect, (req, res) => {
         title,
         description,
         priority,
+        complaint_type,
         room_number,
         status: 'pending',
         created_at: new Date().toISOString()

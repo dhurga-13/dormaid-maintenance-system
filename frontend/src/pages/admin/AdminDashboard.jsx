@@ -9,6 +9,7 @@ const AdminDashboard = () => {
   const [users, setUsers] = useState([]);
   const [loading, setLoading] = useState(true);
   const [assigningTech, setAssigningTech] = useState(null);
+  const [showReport, setShowReport] = useState(false);
 
   // Fetch data from backend
   useEffect(() => {
@@ -127,6 +128,17 @@ const AdminDashboard = () => {
     }
   };
 
+  // Compute complaint type stats
+  const typeStats = React.useMemo(() => {
+    const counts = complaints.reduce((acc, c) => {
+      const key = (c.complaint_type || 'other').toLowerCase();
+      acc[key] = (acc[key] || 0) + 1;
+      return acc;
+    }, {});
+    const entries = Object.entries(counts).sort((a, b) => b[1] - a[1]);
+    return entries;
+  }, [complaints]);
+
   const formatDate = (dateString) => {
     return new Date(dateString).toLocaleDateString('en-US', {
       year: 'numeric',
@@ -187,6 +199,7 @@ const AdminDashboard = () => {
             Refresh
           </button>
           <button
+            onClick={() => setShowReport(true)}
             style={{
               display: 'flex',
               alignItems: 'center',
@@ -289,6 +302,47 @@ const AdminDashboard = () => {
         </div>
       </div>
 
+      {/* Report Modal */}
+      {showReport && (
+        <div style={{
+          position: 'fixed',
+          inset: 0,
+          backgroundColor: 'rgba(0,0,0,0.4)',
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+          zIndex: 50
+        }}>
+          <div style={{
+            backgroundColor: 'white',
+            borderRadius: '0.75rem',
+            width: 'min(560px, 90vw)',
+            boxShadow: '0 10px 25px rgba(0,0,0,0.15)',
+            border: '1px solid #e5e7eb'
+          }}>
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '1rem 1.25rem', borderBottom: '1px solid #e5e7eb' }}>
+              <h3 style={{ margin: 0, fontSize: '1.125rem', fontWeight: 600, color: '#111827' }}>Complaint Type Report</h3>
+              <button onClick={() => setShowReport(false)} style={{ background: 'none', border: '1px solid #e5e7eb', borderRadius: '0.375rem', padding: '0.375rem 0.625rem', cursor: 'pointer' }}>Close</button>
+            </div>
+            <div style={{ padding: '1rem 1.25rem' }}>
+              {typeStats.length > 0 ? (
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
+                  {typeStats.map(([type, count], idx) => (
+                    <div key={type} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '0.75rem 1rem', border: '1px solid #e5e7eb', borderRadius: '0.5rem', backgroundColor: idx === 0 ? '#f0f9ff' : 'white' }}>
+                      <span style={{ textTransform: 'capitalize', color: '#374151', fontWeight: 500 }}>{type}</span>
+                      <span style={{ fontWeight: 700, color: idx === 0 ? '#0ea5e9' : '#111827' }}>{count}</span>
+                    </div>
+                  ))}
+                </div>
+              ) : (
+                <p style={{ color: '#6b7280' }}>No complaints found to generate report.</p>
+              )}
+            </div>
+            {/* Footer removed to avoid duplicate Close button */}
+          </div>
+        </div>
+      )}
+
       {/* Recent Complaints Section */}
       <div style={{ 
         backgroundColor: 'white',
@@ -322,7 +376,7 @@ const AdminDashboard = () => {
                     <p style={{ fontSize: '0.875rem', color: '#6b7280', marginBottom: '0.5rem' }}>
                       <strong>Priority:</strong> <span style={{ color: getPriorityColor(complaint.priority), fontWeight: '500' }}>
                         {complaint.priority}
-                      </span> • <strong>Room:</strong> {complaint.room_number} • <strong>Student:</strong> {complaint.student_name || 'Unknown'}
+                      </span> • <strong>Type:</strong> {complaint.complaint_type || '—'} • <strong>Room:</strong> {complaint.room_number} • <strong>Student:</strong> {complaint.student_name || 'Unknown'}
                     </p>
                     <p style={{ fontSize: '0.875rem', color: '#6b7280', marginBottom: '0.5rem' }}>
                       {complaint.description}
@@ -379,7 +433,7 @@ const AdminDashboard = () => {
                         <option value="">Assign Technician</option>
                         {technicians.map(tech => (
                           <option key={tech.id} value={tech.id}>
-                            {tech.username} ({tech.phone || 'No phone'})
+                            {tech.username} {tech.work_area ? `• ${tech.work_area}` : ''} ({tech.phone || 'No phone'})
                           </option>
                         ))}
                       </select>

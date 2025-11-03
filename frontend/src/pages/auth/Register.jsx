@@ -11,7 +11,8 @@ const Register = () => {
     confirmPassword: '',
     phone: '',
     roomNumber: '',
-    role: 'student'
+    role: 'student',
+    workArea: 'other'
   });
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
@@ -42,7 +43,8 @@ const Register = () => {
         password: formData.password,
         phone: formData.phone,
         roomNumber: formData.roomNumber,
-        role: formData.role
+        role: formData.role,
+        workArea: formData.role === 'technician' ? formData.workArea : undefined
       });
 
       if (result.success) {
@@ -246,6 +248,26 @@ const Register = () => {
 )}
               
             </div>
+
+            {formData.role === 'technician' && (
+              <div>
+                <label htmlFor="workArea" className="form-label">
+                  Work Area / Specialty
+                </label>
+                <select
+                  id="workArea"
+                  value={formData.workArea}
+                  onChange={(e) => handleInputChange('workArea', e.target.value)}
+                  className="form-select"
+                >
+                  <option value="cleaning">Cleaning</option>
+                  <option value="plumbing">Plumbing</option>
+                  <option value="electrician">Electrician</option>
+                  <option value="carpenter">Carpenter</option>
+                  <option value="other">Other</option>
+                </select>
+              </div>
+            )}
 
             <div>
               <label htmlFor="role" className="form-label">

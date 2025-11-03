@@ -34,12 +34,14 @@ exports.register = (req, res) => {
       password, 
       role = 'student', 
       roomNumber,  // Frontend sends 'roomNumber' (maps to room_number)
-      phone
+      phone,
+      workArea     // Frontend sends 'workArea' for technicians
     } = req.body;
 
     // Map frontend field names to backend expectations
     const username = name; // Map 'name' to 'username'
     const room_number = roomNumber; // Map 'roomNumber' to 'room_number'
+    const work_area = role === 'technician' ? workArea || null : null;
 
     console.log('📝 Mapped data:', {
       username: username,
@@ -77,7 +79,8 @@ exports.register = (req, res) => {
         password: password,
         role: role,
         room_number: room_number,
-        phone: phone
+      phone: phone,
+      work_area: work_area
       };
 
       User.create(userData, (err, user) => {
@@ -116,7 +119,8 @@ exports.register = (req, res) => {
               email: user.email,
               role: user.role,
               room_number: user.room_number,
-              phone: user.phone
+              phone: user.phone,
+              work_area: user.work_area || null
             },
             token
           }

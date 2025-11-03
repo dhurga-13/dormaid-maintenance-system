@@ -4,22 +4,22 @@ const bcrypt = require('bcryptjs');
 class User {
   // Create new user
   static create(userData, callback) {
-    const { username, email, password, role = 'student', room_number, phone } = userData;
+    const { username, email, password, role = 'student', room_number, phone, work_area } = userData;
     
     bcrypt.hash(password, 10, (err, hashedPassword) => {
       if (err) return callback(err);
       
       const query = `
-        INSERT INTO users (username, email, password_hash, role, room_number, phone) 
-        VALUES (?, ?, ?, ?, ?, ?)
+        INSERT INTO users (username, email, password_hash, role, room_number, phone, work_area) 
+        VALUES (?, ?, ?, ?, ?, ?, ?)
       `;
       
-      db.run(query, [username, email, hashedPassword, role, room_number, phone], function(err) {
+      db.run(query, [username, email, hashedPassword, role, room_number, phone, work_area || null], function(err) {
         if (err) return callback(err);
         
         // Get the inserted user
         db.get(
-          'SELECT id, username, email, role, room_number, phone, created_at FROM users WHERE id = ?',
+          'SELECT id, username, email, role, room_number, phone, work_area, created_at FROM users WHERE id = ?',
           [this.lastID],
           (err, row) => {
             callback(err, row);

@@ -247,6 +247,11 @@ const StudentDashboard = () => {
                     <p style={{ fontSize: '0.875rem', color: '#6b7280' }}>
                       {complaint.description} • {formatDate(complaint.created_at)}
                     </p>
+                    {complaint.assigned_by_admin_name && complaint.assigned_at && (
+                      <p style={{ fontSize: '0.75rem', color: '#6b7280', marginTop: '0.25rem' }}>
+                        Assigned by {complaint.assigned_by_admin_name} on {formatDate(complaint.assigned_at)}
+                      </p>
+                    )}
                   </div>
                   <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
                     <span 

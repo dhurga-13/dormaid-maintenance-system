@@ -31,7 +31,7 @@ router.get('/complaints', protect, (req, res) => {
 // Get all technicians
 router.get('/technicians', protect, (req, res) => {
   db.all(
-    `SELECT id, username, email, role, phone FROM users WHERE role = 'technician'`,
+    `SELECT id, username, email, role, phone, work_area FROM users WHERE role = 'technician'`,
     (err, rows) => {
       if (err) {
         console.error('Database error:', err);
@@ -74,6 +74,7 @@ router.get('/users', protect, (req, res) => {
 router.put('/complaints/:id/assign', protect, (req, res) => {
   const complaintId = req.params.id;
   const { technicianId } = req.body;
+  const adminId = req.user.userId;
 
   if (!technicianId) {
     return res.status(400).json({
@@ -84,9 +85,9 @@ router.put('/complaints/:id/assign', protect, (req, res) => {
 
   db.run(
     `UPDATE maintenance_requests 
-     SET assigned_to = ?, status = 'in-progress', updated_at = CURRENT_TIMESTAMP 
+     SET assigned_to = ?, assigned_by_admin_id = ?, assigned_at = CURRENT_TIMESTAMP, status = 'in-progress', updated_at = CURRENT_TIMESTAMP 
      WHERE id = ?`,
-    [technicianId, complaintId],
+    [technicianId, adminId, complaintId],
     function(err) {
       if (err) {
         console.error('Database error:', err);
