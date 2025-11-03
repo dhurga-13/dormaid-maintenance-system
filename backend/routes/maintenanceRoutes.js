@@ -71,3 +71,42 @@ router.post('/create', protect, (req, res) => {
 });
 
 module.exports = router;
+ 
+// Delete a maintenance request (only by owner)
+router.delete('/:id', protect, (req, res) => {
+  const userId = req.user.userId;
+  const requestId = req.params.id;
+
+  // Verify the request belongs to the authenticated user
+  db.get(
+    `SELECT id, user_id FROM maintenance_requests WHERE id = ?`,
+    [requestId],
+    (err, row) => {
+      if (err) {
+        console.error('Database error:', err);
+        return res.status(500).json({ success: false, message: 'Internal server error' });
+      }
+
+      if (!row) {
+        return res.status(404).json({ success: false, message: 'Request not found' });
+      }
+
+      if (String(row.user_id) !== String(userId)) {
+        return res.status(403).json({ success: false, message: 'Not authorized to delete this request' });
+      }
+
+      db.run(
+        `DELETE FROM maintenance_requests WHERE id = ?`,
+        [requestId],
+        function(deleteErr) {
+          if (deleteErr) {
+            console.error('Database error:', deleteErr);
+            return res.status(500).json({ success: false, message: 'Internal server error' });
+          }
+
+          return res.json({ success: true, message: 'Request deleted successfully' });
+        }
+      );
+    }
+  );
+});

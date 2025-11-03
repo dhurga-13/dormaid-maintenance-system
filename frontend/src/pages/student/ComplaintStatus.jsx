@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { ArrowLeft, Search, Filter, Clock, CheckCircle, AlertCircle, RefreshCw } from 'lucide-react';
+import { ArrowLeft, Search, Filter, Clock, CheckCircle, AlertCircle, RefreshCw, Trash } from 'lucide-react';
 import { useAuth } from '../../context/AuthContext';
 
 const ComplaintStatus = () => {
@@ -9,6 +9,7 @@ const ComplaintStatus = () => {
   const [complaints, setComplaints] = useState([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
+  const [deletingId, setDeletingId] = useState(null);
 
   // Fetch complaints from backend
   useEffect(() => {
@@ -39,6 +40,30 @@ const ComplaintStatus = () => {
   const handleRefresh = () => {
     setRefreshing(true);
     fetchComplaints();
+  };
+
+  const handleDelete = async (id) => {
+    const confirmed = window.confirm('Are you sure you want to delete this complaint?');
+    if (!confirmed) return;
+    try {
+      setDeletingId(id);
+      const token = localStorage.getItem('dormaid_token');
+      const response = await fetch(`http://localhost:5000/api/maintenance/${id}`, {
+        method: 'DELETE',
+        headers: { 'Authorization': `Bearer ${token}` }
+      });
+      if (response.ok) {
+        setComplaints(prev => prev.filter(c => c.id !== id));
+      } else {
+        const err = await response.json().catch(() => ({}));
+        alert(err.message || 'Failed to delete complaint');
+      }
+    } catch (e) {
+      console.error('Delete error:', e);
+      alert('Failed to delete complaint');
+    } finally {
+      setDeletingId(null);
+    }
   };
 
   const filteredComplaints = complaints.filter(complaint => {
@@ -300,6 +325,27 @@ const ComplaintStatus = () => {
                   >
                     {getStatusText(complaint.status)}
                   </span>
+                  <button
+                    onClick={() => handleDelete(complaint.id)}
+                    disabled={deletingId === complaint.id}
+                    title="Delete complaint"
+                    style={{
+                      display: 'flex',
+                      alignItems: 'center',
+                      gap: '0.25rem',
+                      padding: '0.375rem 0.5rem',
+                      backgroundColor: '#fee2e2',
+                      color: '#b91c1c',
+                      border: '1px solid #fecaca',
+                      borderRadius: '0.375rem',
+                      cursor: deletingId === complaint.id ? 'not-allowed' : 'pointer'
+                    }}
+                  >
+                    <Trash size={14} />
+                    <span style={{ fontSize: '0.75rem', fontWeight: 600 }}>
+                      {deletingId === complaint.id ? 'Deleting...' : 'Delete'}
+                    </span>
+                  </button>
                 </div>
               </div>
 
