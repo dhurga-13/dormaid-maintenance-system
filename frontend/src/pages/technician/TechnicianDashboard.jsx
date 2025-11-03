@@ -4,105 +4,150 @@ import { useAuth } from '../../context/AuthContext';
 
 const TechnicianDashboard = () => {
   const { user } = useAuth();
-  const [activeTab, setActiveTab] = useState('assigned');
-  const [searchTerm, setSearchTerm] = useState('');
   const [tasks, setTasks] = useState([]);
-  const [loading, setLoading] = useState(true);
+  const [activeTab, setActiveTab] = useState('all');
+  const [searchTerm, setSearchTerm] = useState('');
+  const [loading, setLoading] = useState(false);
   const [updatingTask, setUpdatingTask] = useState(null);
 
-  // Fetch technician's assigned tasks from backend
-  useEffect(() => {
-    fetchTechnicianTasks();
-  }, []);
-
-  const fetchTechnicianTasks = async () => {
+   // ...existing code...
+  // Fetch technician tasks
+  const fetchTasks = async () => {
+    setLoading(true);
     try {
-      const token = localStorage.getItem('dormaid_token');
-      const response = await fetch('http://localhost:5000/api/technician/tasks', {
-        headers: { 'Authorization': `Bearer ${token}` }
+      const techQuery = user?.id ? `?technicianId=${encodeURIComponent(user.id)}` : '';
+      // NOTE: use the router mount + route: /api/technician/tasks
+      const response = await fetch(`http://localhost:5000/api/technician/tasks${techQuery}`, {
+        headers: {
+          Authorization: `Bearer ${localStorage.getItem('dormaid_token') || localStorage.getItem('token')}`,
+          'Content-Type': 'application/json'
+        }
       });
 
-      if (response.ok) {
-        const result = await response.json();
-        console.log('Technician tasks:', result.data); // Debug log
-        setTasks(result.data || []);
-      } else {
-        console.error('Failed to fetch technician tasks:', response.status);
+      // defensive: if server returned non-JSON (HTML 404), log body for debugging
+      if (!response.ok) {
+        const text = await response.text();
+        console.error('Fetch tasks failed', response.status, text);
+        setTasks([]);
+        return;
       }
-    } catch (error) {
-      console.error('Error fetching technician tasks:', error);
+
+      const data = await response.json();
+      // backend returns { success: true, data: [...] }
+      const tasksList = data.data || data.tasks || [];
+      // keep client-side safety filter if needed
+      const filtered = user
+        ? tasksList.filter(t =>
+            t.assigned_to == user.id ||
+            t.technician_id == user.id ||
+            t.assignedTechnicianId == user.id ||
+            String(t.assigned_to).toLowerCase() === String(user.id).toLowerCase() ||
+            t.assigned_to_email === user.email ||
+            t.technician_email === user.email
+          )
+        : tasksList;
+
+      setTasks(filtered);
+    } catch (err) {
+      console.error('Fetch error:', err);
+      setTasks([]);
     } finally {
       setLoading(false);
     }
   };
+// ...existing code...
 
+  // run fetch after user is available (so we can scope to assigned technician)
+  useEffect(() => {
+    if (user) fetchTasks();
+  }, [user]);
+  // ...existing code...
   // Update task status
   const updateTaskStatus = async (taskId, newStatus) => {
     setUpdatingTask(taskId);
     try {
-      const token = localStorage.getItem('dormaid_token');
+      const token = localStorage.getItem('dormaid_token') || localStorage.getItem('token');
       const response = await fetch(`http://localhost:5000/api/technician/tasks/${taskId}/status`, {
         method: 'PUT',
         headers: {
           'Content-Type': 'application/json',
-          'Authorization': `Bearer ${token}`
+          Authorization: `Bearer ${token}`,
         },
-        body: JSON.stringify({ status: newStatus })
+        body: JSON.stringify({ status: newStatus }),
       });
 
-      const result = await response.json();
-      
-      if (result.success) {
-        // Update local state
-        setTasks(prev => prev.map(task => 
-          task.id === taskId 
-            ? { 
-                ...task, 
-                status: newStatus,
-                ...(newStatus === 'completed' && { completed_date: new Date().toISOString() })
-              }
-            : task
-        ));
-        alert(`Task status updated to ${getStatusText(newStatus)}`);
+      if (!response.ok) {
+        const text = await response.text();
+        console.error('Update status failed', response.status, text);
+        return;
+      }
+
+      const resJson = await response.json();
+      // backend returns updated row in resJson.data
+      const updated = resJson.data || null;
+
+      if (updated) {
+        setTasks(prevTasks => prevTasks.map(t => (t.id === updated.id ? { ...t, ...updated } : t)));
       } else {
-        alert('Error updating task: ' + result.message);
+        // fallback: optimistically update local state
+        setTasks(prevTasks =>
+          prevTasks.map(task =>
+            task.id === taskId
+              ? { ...task, status: newStatus, completed_date: newStatus === 'completed' ? new Date().toISOString() : null }
+              : task
+          )
+        );
       }
     } catch (error) {
-      console.error('Error updating task:', error);
-      alert('Error updating task');
+      console.error('Update error:', error);
     } finally {
       setUpdatingTask(null);
     }
   };
+// ...existing code...
+  // Format date
+  const formatDate = (dateString) => {
+    const date = new Date(dateString);
+    return date.toLocaleDateString('en-IN', {
+      day: 'numeric',
+      month: 'short',
+      year: 'numeric',
+    });
+  };
 
-  // Calculate stats from real data
+  // Calculate statistics
   const stats = {
     totalTasks: tasks.length,
     assigned: tasks.filter(task => task.status === 'pending').length,
     inProgress: tasks.filter(task => task.status === 'in-progress').length,
-    completed: tasks.filter(task => task.status === 'resolved').length,
+    completed: tasks.filter(task => task.status === 'completed').length,
     highPriority: tasks.filter(task => task.priority === 'high').length
   };
 
   const recentTasks = tasks.slice(0, 3);
 
+  // Filtered tasks
   const filteredTasks = tasks.filter(task => {
-    const matchesStatus = activeTab === 'all' || 
+    const matchesStatus =
+      activeTab === 'all' ||
       (activeTab === 'assigned' && task.status === 'pending') ||
       (activeTab === 'in-progress' && task.status === 'in-progress') ||
-      (activeTab === 'completed' && task.status === 'resolved');
-    
-    const matchesSearch = task.title.toLowerCase().includes(searchTerm.toLowerCase()) ||
-                         (task.student_name && task.student_name.toLowerCase().includes(searchTerm.toLowerCase())) ||
-                         task.room_number.toLowerCase().includes(searchTerm.toLowerCase());
+      (activeTab === 'completed' && task.status === 'completed');
+
+    const matchesSearch =
+      task.title.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      (task.student_name && task.student_name.toLowerCase().includes(searchTerm.toLowerCase())) ||
+      task.room_number.toLowerCase().includes(searchTerm.toLowerCase());
+
     return matchesStatus && matchesSearch;
   });
 
+  // Icon helpers
   const getStatusIcon = (status) => {
     switch (status) {
       case 'pending': return <Clock style={{ width: '1rem', height: '1rem', color: '#f59e0b' }} />;
       case 'in-progress': return <Wrench style={{ width: '1rem', height: '1rem', color: '#3b82f6' }} />;
-      case 'resolved': return <CheckCircle style={{ width: '1rem', height: '1rem', color: '#10b981' }} />;
+      case 'completed': return <CheckCircle style={{ width: '1rem', height: '1rem', color: '#10b981' }} />;
       default: return <Clock style={{ width: '1rem', height: '1rem' }} />;
     }
   };
@@ -111,466 +156,200 @@ const TechnicianDashboard = () => {
     switch (status) {
       case 'pending': return 'Assigned';
       case 'in-progress': return 'In Progress';
-      case 'resolved': return 'Completed';
+      case 'completed': return 'Completed';
       default: return status;
     }
   };
 
-  const getPriorityColor = (priority) => {
-    switch (priority) {
-      case 'high': return '#ef4444';
-      case 'medium': return '#f59e0b';
-      case 'low': return '#10b981';
-      default: return '#6b7280';
+  const getStatusStyles = (status) => {
+    switch (status) {
+      case 'pending':
+        return { backgroundColor: '#fef3c7', color: '#d97706' };
+      case 'in-progress':
+        return { backgroundColor: '#dbeafe', color: '#2563eb' };
+      case 'completed':
+        return { backgroundColor: '#d1fae5', color: '#059669' };
+      default:
+        return { backgroundColor: '#f3f4f6', color: '#6b7280' };
     }
   };
 
-  const formatDate = (dateString) => {
-    if (!dateString) return 'N/A';
-    return new Date(dateString).toLocaleDateString('en-US', {
-      year: 'numeric',
-      month: 'short',
-      day: 'numeric'
-    });
-  };
-
-  if (loading) {
-    return (
-      <div style={{ padding: '2rem', textAlign: 'center' }}>
-        <div style={{
-          width: '3rem',
-          height: '3rem',
-          border: '3px solid transparent',
-          borderTop: '3px solid #3b82f6',
-          borderRadius: '50%',
-          animation: 'spin 1s linear infinite',
-          margin: '0 auto 1rem'
-        }} />
-        <p style={{ color: '#6b7280' }}>Loading technician dashboard...</p>
-      </div>
-    );
-  }
-
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', gap: '1.5rem', padding: '1rem' }}>
-      {/* Header */}
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-        <div>
-          <h1 style={{ fontSize: '2rem', fontWeight: 'bold', color: '#111827', margin: 0 }}>Technician Dashboard</h1>
-          <p style={{ color: '#6b7280', margin: 0 }}>Welcome back, {user?.username}</p>
-        </div>
-        <div style={{ display: 'flex', gap: '1rem' }}>
-          <button
-            onClick={fetchTechnicianTasks}
-            style={{
-              display: 'flex',
-              alignItems: 'center',
-              gap: '0.5rem',
-              backgroundColor: '#f3f4f6',
-              color: '#374151',
-              padding: '0.75rem 1rem',
-              border: '1px solid #d1d5db',
-              borderRadius: '0.5rem',
-              fontWeight: '500',
-              cursor: 'pointer'
-            }}
-          >
-            <RefreshCw size={16} />
-            Refresh
-          </button>
-          <button
-            style={{
-              display: 'flex',
-              alignItems: 'center',
-              gap: '0.5rem',
-              backgroundColor: '#3b82f6',
-              color: 'white',
-              padding: '0.75rem 1.5rem',
-              border: 'none',
-              borderRadius: '0.5rem',
-              fontWeight: '500',
-              cursor: 'pointer'
-            }}
-          >
-            <Wrench size={20} />
-            <span>Quick Report</span>
-          </button>
-        </div>
+    <div style={{ padding: '2rem', backgroundColor: '#f9fafb', minHeight: '100vh' }}>
+      <header style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+        <h2 style={{ fontSize: '1.5rem', fontWeight: '600' }}>Technician Dashboard</h2>
+        <button
+          onClick={fetchTasks}
+          style={{
+            display: 'flex',
+            alignItems: 'center',
+            gap: '0.5rem',
+            backgroundColor: '#3b82f6',
+            color: 'white',
+            border: 'none',
+            padding: '0.5rem 1rem',
+            borderRadius: '0.375rem',
+            cursor: 'pointer',
+          }}
+        >
+          <RefreshCw size={16} />
+          Refresh
+        </button>
+      </header>
+
+      {/* Stats */}
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: '1rem', marginTop: '2rem' }}>
+        <StatCard icon={<List />} label="Total Tasks" value={stats.totalTasks} color="#3b82f6" />
+        <StatCard icon={<Clock />} label="Assigned" value={stats.assigned} color="#f59e0b" />
+        <StatCard icon={<Wrench />} label="In Progress" value={stats.inProgress} color="#3b82f6" />
+        <StatCard icon={<CheckCircle />} label="Completed" value={stats.completed} color="#10b981" />
+        <StatCard icon={<AlertTriangle />} label="High Priority" value={stats.highPriority} color="#ef4444" />
       </div>
 
-      {/* Stats Cards */}
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: '1rem' }}>
-        <div style={{ 
-          backgroundColor: 'white', 
-          padding: '1.5rem', 
-          borderRadius: '0.75rem',
-          boxShadow: '0 1px 3px rgba(0,0,0,0.1)',
-          border: '1px solid #e5e7eb'
-        }}>
-          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-            <div>
-              <p style={{ fontSize: '0.875rem', fontWeight: '500', color: '#6b7280' }}>Total Tasks</p>
-              <p style={{ fontSize: '1.5rem', fontWeight: 'bold', color: '#111827' }}>{stats.totalTasks}</p>
-            </div>
-            <List style={{ width: '2rem', height: '2rem', color: '#9ca3af' }} />
-          </div>
-        </div>
-
-        <div style={{ 
-          backgroundColor: 'white', 
-          padding: '1.5rem', 
-          borderRadius: '0.75rem',
-          boxShadow: '0 1px 3px rgba(0,0,0,0.1)',
-          border: '1px solid #e5e7eb'
-        }}>
-          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-            <div>
-              <p style={{ fontSize: '0.875rem', fontWeight: '500', color: '#6b7280' }}>Assigned</p>
-              <p style={{ fontSize: '1.5rem', fontWeight: 'bold', color: '#f59e0b' }}>{stats.assigned}</p>
-            </div>
-            <Clock style={{ width: '2rem', height: '2rem', color: '#f59e0b' }} />
-          </div>
-        </div>
-
-        <div style={{ 
-          backgroundColor: 'white', 
-          padding: '1.5rem', 
-          borderRadius: '0.75rem',
-          boxShadow: '0 1px 3px rgba(0,0,0,0.1)',
-          border: '1px solid #e5e7eb'
-        }}>
-          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-            <div>
-              <p style={{ fontSize: '0.875rem', fontWeight: '500', color: '#6b7280' }}>In Progress</p>
-              <p style={{ fontSize: '1.5rem', fontWeight: 'bold', color: '#3b82f6' }}>{stats.inProgress}</p>
-            </div>
-            <div style={{ 
-              width: '2rem', 
-              height: '2rem', 
-              backgroundColor: '#dbeafe',
-              borderRadius: '50%',
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'center'
-            }}>
-              <div style={{ 
-                width: '1rem', 
-                height: '1rem', 
-                backgroundColor: '#3b82f6',
-                borderRadius: '50%'
-              }}></div>
-            </div>
-          </div>
-        </div>
-
-        <div style={{ 
-          backgroundColor: 'white', 
-          padding: '1.5rem', 
-          borderRadius: '0.75rem',
-          boxShadow: '0 1px 3px rgba(0,0,0,0.1)',
-          border: '1px solid #e5e7eb'
-        }}>
-          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-            <div>
-              <p style={{ fontSize: '0.875rem', fontWeight: '500', color: '#6b7280' }}>Completed</p>
-              <p style={{ fontSize: '1.5rem', fontWeight: 'bold', color: '#10b981' }}>{stats.completed}</p>
-            </div>
-            <CheckCircle style={{ width: '2rem', height: '2rem', color: '#10b981' }} />
-          </div>
-        </div>
-      </div>
-
-      {/* Recent Tasks Section */}
-      <div style={{ 
-        backgroundColor: 'white',
-        borderRadius: '0.75rem',
-        boxShadow: '0 1px 3px rgba(0,0,0,0.1)',
-        border: '1px solid #e5e7eb'
-      }}>
-        <div style={{ padding: '1.5rem', borderBottom: '1px solid #e5e7eb' }}>
-          <h2 style={{ fontSize: '1.25rem', fontWeight: '600', color: '#1f2937' }}>Recent Tasks</h2>
-        </div>
-        <div style={{ padding: '1.5rem' }}>
-          {recentTasks.length > 0 ? (
-            <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
-              {recentTasks.map((task) => (
-                <div key={task.id} style={{ 
-                  display: 'flex', 
-                  alignItems: 'center', 
-                  justifyContent: 'space-between',
-                  padding: '1rem',
-                  border: '1px solid #e5e7eb',
-                  borderRadius: '0.5rem'
-                }}>
-                  <div>
-                    <h3 style={{ fontWeight: '500', color: '#111827' }}>{task.title}</h3>
-                    <p style={{ fontSize: '0.875rem', color: '#6b7280' }}>
-                      Room {task.room_number} • {formatDate(task.created_at)}
-                    </p>
-                  </div>
-                  <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-                    {getStatusIcon(task.status)}
-                    <span style={{ 
-                      padding: '0.375rem 0.75rem',
-                      borderRadius: '9999px',
-                      fontSize: '0.75rem',
-                      fontWeight: '600',
-                      textTransform: 'capitalize',
-                      ...(task.status === 'pending' && {
-                        backgroundColor: '#fef3c7',
-                        color: '#d97706'
-                      }),
-                      ...(task.status === 'in-progress' && {
-                        backgroundColor: '#dbeafe',
-                        color: '#2563eb'
-                      }),
-                      ...(task.status === 'resolved' && {
-                        backgroundColor: '#d1fae5',
-                        color: '#059669'
-                      })
-                    }}>
-                      {getStatusText(task.status)}
-                    </span>
-                  </div>
-                </div>
-              ))}
-            </div>
-          ) : (
-            <p style={{ color: '#6b7280', textAlign: 'center', padding: '2rem' }}>No tasks assigned yet</p>
-          )}
-          
-          <div style={{ marginTop: '1.5rem', textAlign: 'center' }}>
+      {/* Search and Tabs */}
+      <div style={{ marginTop: '2rem', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+        <div style={{ display: 'flex', gap: '0.75rem' }}>
+          {['all', 'assigned', 'in-progress', 'completed'].map(tab => (
             <button
-              onClick={() => setActiveTab('all')}
+              key={tab}
+              onClick={() => setActiveTab(tab)}
               style={{
-                color: '#3b82f6',
-                fontWeight: '500',
-                background: 'none',
+                padding: '0.5rem 1rem',
+                backgroundColor: activeTab === tab ? '#3b82f6' : '#e5e7eb',
+                color: activeTab === tab ? 'white' : '#374151',
+                borderRadius: '0.375rem',
                 border: 'none',
                 cursor: 'pointer',
-                fontSize: '0.875rem'
+                fontWeight: '500'
               }}
             >
-              View All Tasks →
+              {tab.charAt(0).toUpperCase() + tab.slice(1)}
             </button>
-          </div>
+          ))}
+        </div>
+
+        <div style={{ display: 'flex', alignItems: 'center', backgroundColor: 'white', borderRadius: '0.375rem', padding: '0.25rem 0.5rem', border: '1px solid #e5e7eb' }}>
+          <Search size={16} style={{ color: '#6b7280' }} />
+          <input
+            type="text"
+            placeholder="Search tasks..."
+            value={searchTerm}
+            onChange={(e) => setSearchTerm(e.target.value)}
+            style={{
+              border: 'none',
+              outline: 'none',
+              marginLeft: '0.5rem',
+              fontSize: '0.875rem',
+              color: '#374151'
+            }}
+          />
         </div>
       </div>
 
-      {/* All Tasks Section */}
-      <div style={{ 
-        backgroundColor: 'white',
-        borderRadius: '0.75rem',
-        boxShadow: '0 1px 3px rgba(0,0,0,0.1)',
-        border: '1px solid #e5e7eb'
-      }}>
-        <div style={{ padding: '1.5rem', borderBottom: '1px solid #e5e7eb' }}>
-          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1rem' }}>
-            <h2 style={{ fontSize: '1.25rem', fontWeight: '600', color: '#1f2937' }}>All Tasks</h2>
-            
-            {/* Search */}
-            <div style={{ position: 'relative' }}>
-              <Search style={{ 
-                position: 'absolute', 
-                left: '0.75rem', 
-                top: '50%', 
-                transform: 'translateY(-50%)',
-                width: '1rem',
-                height: '1rem',
-                color: '#9ca3af'
-              }} />
-              <input
-                type="text"
-                placeholder="Search tasks by title, room, or student..."
-                value={searchTerm}
-                onChange={(e) => setSearchTerm(e.target.value)}
-                style={{
-                  padding: '0.75rem 0.75rem 0.75rem 2.5rem',
-                  border: '1px solid #d1d5db',
-                  borderRadius: '0.5rem',
-                  fontSize: '0.875rem',
-                  width: '300px'
-                }}
-              />
-            </div>
-          </div>
-
-          {/* Tab Navigation */}
-          <div style={{ display: 'flex', gap: '0.5rem', flexWrap: 'wrap' }}>
-            {[
-              { key: 'all', label: 'All Tasks' },
-              { key: 'assigned', label: 'Assigned' },
-              { key: 'in-progress', label: 'In Progress' },
-              { key: 'completed', label: 'Completed' }
-            ].map(tab => (
-              <button
-                key={tab.key}
-                onClick={() => setActiveTab(tab.key)}
-                style={{
-                  padding: '0.5rem 1rem',
-                  border: 'none',
-                  backgroundColor: activeTab === tab.key ? '#3b82f6' : 'transparent',
-                  color: activeTab === tab.key ? 'white' : '#6b7280',
-                  borderRadius: '0.375rem',
-                  fontWeight: '500',
-                  cursor: 'pointer',
-                  fontSize: '0.875rem'
-                }}
-              >
-                {tab.label}
-              </button>
-            ))}
-          </div>
-        </div>
-
-        {/* Tasks List */}
-        <div style={{ padding: '1.5rem' }}>
-          {filteredTasks.length > 0 ? (
-            <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
-              {filteredTasks.map(task => (
-                <div key={task.id} style={{ 
-                  padding: '1.5rem', 
-                  border: '1px solid #e5e7eb',
-                  borderRadius: '0.5rem',
-                  backgroundColor: 'white'
-                }}>
-                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '1rem' }}>
-                    <div style={{ flex: 1 }}>
-                      <div style={{ display: 'flex', alignItems: 'center', gap: '1rem', marginBottom: '0.5rem', flexWrap: 'wrap' }}>
-                        <h3 style={{ fontSize: '1.125rem', fontWeight: '600', color: '#111827' }}>
-                          {task.title}
-                        </h3>
-                        <span style={{ 
-                          padding: '0.25rem 0.75rem', 
-                          backgroundColor: '#f3f4f6',
-                          borderRadius: '0.375rem',
-                          fontSize: '0.75rem',
-                          fontWeight: '500',
-                          color: '#374151'
-                        }}>
-                          Priority: <span style={{ color: getPriorityColor(task.priority) }}>{task.priority}</span>
-                        </span>
-                      </div>
-                      
-                      <p style={{ color: '#6b7280', marginBottom: '0.75rem', lineHeight: '1.5' }}>
-                        {task.description}
-                      </p>
-
-                      <div style={{ display: 'flex', gap: '2rem', alignItems: 'center', fontSize: '0.875rem', color: '#6b7280', flexWrap: 'wrap' }}>
-                        <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-                          <User size={16} />
-                          <span><strong>Student:</strong> {task.student_name || 'Unknown'}</span>
-                        </div>
-                        <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-                          <Calendar size={16} />
-                          <span><strong>Room:</strong> {task.room_number}</span>
-                        </div>
-                        <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-                          <Clock size={16} />
-                          <span><strong>Assigned:</strong> {formatDate(task.created_at)}</span>
-                        </div>
-                      </div>
-                    </div>
-
-                    <div style={{ display: 'flex', alignItems: 'center', gap: '1rem' }}>
-                      <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-                        {getStatusIcon(task.status)}
-                        <span style={{ 
-                          padding: '0.5rem 1rem',
-                          borderRadius: '9999px',
-                          fontSize: '0.75rem',
-                          fontWeight: '600',
-                          textTransform: 'capitalize',
-                          ...(task.status === 'pending' && {
-                            backgroundColor: '#fef3c7',
-                            color: '#d97706'
-                          }),
-                          ...(task.status === 'in-progress' && {
-                            backgroundColor: '#dbeafe',
-                            color: '#2563eb'
-                          }),
-                          ...(task.status === 'resolved' && {
-                            backgroundColor: '#d1fae5',
-                            color: '#059669'
-                          })
-                        }}>
-                          {getStatusText(task.status)}
-                        </span>
-                      </div>
-                    </div>
+      {/* Task List */}
+      <div style={{ marginTop: '2rem' }}>
+        {loading ? (
+          <p>Loading tasks...</p>
+        ) : filteredTasks.length === 0 ? (
+          <p>No tasks found.</p>
+        ) : (
+          <div style={{ display: 'grid', gap: '1rem' }}>
+            {filteredTasks.map(task => (
+              <div key={task.id} style={{ backgroundColor: 'white', borderRadius: '0.5rem', padding: '1rem', boxShadow: '0 1px 3px rgba(0,0,0,0.1)' }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                  <div>
+                    <h4 style={{ fontSize: '1rem', fontWeight: '600' }}>{task.title}</h4>
+                    <p style={{ fontSize: '0.875rem', color: '#6b7280' }}>Room {task.room_number}</p>
                   </div>
-
-                  {/* Action Buttons */}
-                  <div style={{ display: 'flex', gap: '0.75rem', justifyContent: 'flex-end', borderTop: '1px solid #f3f4f6', paddingTop: '1rem' }}>
-                    {task.status === 'pending' && (
-                      <button
-                        onClick={() => updateTaskStatus(task.id, 'in-progress')}
-                        disabled={updatingTask === task.id}
-                        style={{
-                          padding: '0.5rem 1rem',
-                          backgroundColor: updatingTask === task.id ? '#9ca3af' : '#3b82f6',
-                          color: 'white',
-                          border: 'none',
-                          borderRadius: '0.375rem',
-                          fontSize: '0.875rem',
-                          fontWeight: '500',
-                          cursor: updatingTask === task.id ? 'not-allowed' : 'pointer'
-                        }}
-                      >
-                        {updatingTask === task.id ? 'Starting...' : 'Start Task'}
-                      </button>
-                    )}
-                    {task.status === 'in-progress' && (
-                      <button
-                        onClick={() => updateTaskStatus(task.id, 'resolved')}
-                        disabled={updatingTask === task.id}
-                        style={{
-                          padding: '0.5rem 1rem',
-                          backgroundColor: updatingTask === task.id ? '#9ca3af' : '#10b981',
-                          color: 'white',
-                          border: 'none',
-                          borderRadius: '0.375rem',
-                          fontSize: '0.875rem',
-                          fontWeight: '500',
-                          cursor: updatingTask === task.id ? 'not-allowed' : 'pointer'
-                        }}
-                      >
-                        {updatingTask === task.id ? 'Completing...' : 'Mark Complete'}
-                      </button>
-                    )}
-                    {task.status === 'resolved' && task.completed_date && (
-                      <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', color: '#10b981' }}>
-                        <CheckCircle size={16} />
-                        <span>Completed on {formatDate(task.completed_date)}</span>
-                      </div>
-                    )}
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', ...getStatusStyles(task.status), padding: '0.25rem 0.5rem', borderRadius: '0.375rem' }}>
+                    {getStatusIcon(task.status)}
+                    <span style={{ fontSize: '0.875rem', fontWeight: '500' }}>{getStatusText(task.status)}</span>
                   </div>
                 </div>
-              ))}
-            </div>
-          ) : (
-            <div style={{ textAlign: 'center', padding: '3rem' }}>
-              <Wrench style={{ width: '3rem', height: '3rem', color: '#9ca3af', margin: '0 auto 1rem' }} />
-              <p style={{ color: '#6b7280', fontSize: '1.125rem' }}>No tasks found</p>
-              <p style={{ color: '#9ca3af' }}>
-                {searchTerm ? 'Try adjusting your search criteria' : 'No tasks assigned to you yet'}
-              </p>
-            </div>
-          )}
-        </div>
-      </div>
 
-      {/* CSS for spinner animation */}
-      <style>
-        {`
-          @keyframes spin {
-            from { transform: rotate(0deg); }
-            to { transform: rotate(360deg); }
-          }
-        `}
-      </style>
+                <p style={{ marginTop: '0.75rem', color: '#374151', fontSize: '0.875rem' }}>{task.description}</p>
+
+                {/* Action Buttons */}
+                <div style={{ display: 'flex', gap: '0.75rem', justifyContent: 'flex-end', borderTop: '1px solid #f3f4f6', paddingTop: '1rem' }}>
+                  {task.status === 'pending' && (
+                    <button
+                      onClick={() => updateTaskStatus(task.id, 'in-progress')}
+                      disabled={updatingTask === task.id}
+                      style={{
+                        padding: '0.5rem 1rem',
+                        backgroundColor: updatingTask === task.id ? '#9ca3af' : '#3b82f6',
+                        color: 'white',
+                        border: 'none',
+                        borderRadius: '0.375rem',
+                        fontSize: '0.875rem',
+                        fontWeight: '500',
+                        cursor: updatingTask === task.id ? 'not-allowed' : 'pointer'
+                      }}
+                    >
+                      {updatingTask === task.id ? 'Starting...' : 'Start Task'}
+                    </button>
+                  )}
+                  {task.status === 'in-progress' && (
+                    <button
+                      onClick={() => updateTaskStatus(task.id, 'completed')}
+                      disabled={updatingTask === task.id}
+                      style={{
+                        padding: '0.5rem 1rem',
+                        backgroundColor: updatingTask === task.id ? '#9ca3af' : '#10b981',
+                        color: 'white',
+                        border: 'none',
+                        borderRadius: '0.375rem',
+                        fontSize: '0.875rem',
+                        fontWeight: '500',
+                        cursor: updatingTask === task.id ? 'not-allowed' : 'pointer'
+                      }}
+                    >
+                      {updatingTask === task.id ? 'Completing...' : 'Mark Complete'}
+                    </button>
+                  )}
+                  {task.status === 'completed' && task.completed_date && (
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', color: '#10b981' }}>
+                      <CheckCircle size={16} />
+                      <span>Completed on {formatDate(task.completed_date)}</span>
+                    </div>
+                  )}
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
     </div>
   );
 };
+
+// Stat Card Component
+const StatCard = ({ icon, label, value, color }) => (
+  <div style={{
+    backgroundColor: 'white',
+    borderRadius: '0.5rem',
+    padding: '1.25rem',
+    display: 'flex',
+    alignItems: 'center',
+    gap: '1rem',
+    boxShadow: '0 1px 3px rgba(0,0,0,0.1)'
+  }}>
+    <div style={{
+      backgroundColor: `${color}20`,
+      color: color,
+      borderRadius: '9999px',
+      padding: '0.5rem',
+      display: 'flex',
+      alignItems: 'center',
+      justifyContent: 'center'
+    }}>
+      {icon}
+    </div>
+    <div>
+      <p style={{ fontSize: '0.875rem', color: '#6b7280' }}>{label}</p>
+      <p style={{ fontSize: '1.25rem', fontWeight: '600' }}>{value}</p>
+    </div>
+  </div>
+);
 
 export default TechnicianDashboard;
